@@ -1,13 +1,15 @@
 {
   "manifest_version": 3,
   "name": "OpenClaw Browser Relay",
-  "description": "Claude-like browser assistant workflow for OpenClaw relay with local fallback.",
-  "version": "0.3.0",
+  "description": "OpenClaw Browser Mode v4: relay handshake, safe command execution, persistent tab memory, and side panel assistant.",
+  "version": "0.4.0",
   "minimum_chrome_version": "114",
   "permissions": [
     "storage",
     "tabs",
-    "activeTab"
+    "activeTab",
+    "sidePanel",
+    "alarms"
   ],
   "host_permissions": [
     "http://127.0.0.1/*",
@@ -18,8 +20,11 @@
     "type": "module"
   },
   "action": {
-    "default_title": "OpenClaw Relay",
+    "default_title": "OpenClaw Browser Mode",
     "default_popup": "src/popup.html"
+  },
+  "side_panel": {
+    "default_path": "src/sidepanel.html"
   },
   "content_scripts": [
     {

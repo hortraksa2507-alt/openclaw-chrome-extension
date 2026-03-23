@@ -1,39 +1,56 @@
-# OpenClaw Chrome Extension (v3)
+# OpenClaw Chrome Extension (v4 Browser Mode)
 
-A Manifest V3 Chrome extension for OpenClaw browser relay workflows, now with voice command input, in-popup action history, and safe autopilot.
+OpenClaw Browser Mode v4 turns the extension into a persistent browser assistant (side panel primary, popup fallback), not just a small popup utility.
 
-> Inspired by public Claude-for-Chrome workflows, but implemented as an independent local-first OpenClaw extension.
+## What v4 adds
 
-## What’s new in v3
+### 1) Stable relay handshake layer
+- Relay state machine: `connecting` → `online` / `degraded` / `offline`
+- Periodic health checks via `chrome.alarms` (`GET /health`)
+- Lightweight retry/backoff with `nextRetryAt`
+- Structured diagnostics (status code, latency, last error)
 
-1. **Voice command input in popup**
-   - Uses Web Speech API (`SpeechRecognition` / `webkitSpeechRecognition`) when available.
-   - Graceful fallback: mic button disables with clear hint if unsupported.
+### 2) Better command understanding
+Natural command plan parser now supports:
+- `go to ...`, `navigate to ...`
+- `open new tab [url]`
+- `click ...`
+- `type field = value`, `fill field with value`
+- `search ...`
+- `summarize page`
+- `extract links`
+- `extract forms`
+- Multi-step chains (`then`, `and then`, `;`)
 
-2. **Action history in popup**
-   - Tracks recent actions with status (`ok` / `warn` / `error`) and timestamps.
-   - Includes **Clear** button.
-   - Persists in extension local storage (last 40 actions).
+### 3) Persistent tab context memory
+Per-tab memory in local storage:
+- last snapshot
+- last understanding
+- last suggestions
+- last plan preview
+- recent actions for that tab
 
-3. **One-click Safe Autopilot**
-   - Analyzes current page context.
-   - Proposes low-risk and risky actions.
-   - Automatically executes only low-risk steps.
-   - Risky actions (`submit/delete/payment/send/...`) are listed and require explicit click confirmation before execution.
+When you return to a tab, UI shows that restore context is available.
 
-4. **UX polish**
-   - Cleaner v3 popup layout, clearer section labels, status visibility, and compact history/risky lists.
+### 4) Side-panel assistant UX
+- Side Panel API is enabled and set as primary experience (`sidepanel.html`)
+- Popup remains as fallback (`popup.html`)
+- Conversation-like action log + suggested next steps
+- Dry-run preview for command plans
 
-## Existing features kept (v2 compatibility)
+### 5) Safety controls
+- Risky commands detected (`submit/delete/payment/send/...`)
+- Risky flows require explicit **Confirm + run**
+- Dry-run plan preview before execution (especially for multi-step commands)
 
-- Attach/detach current tab
-- Snapshot page
-- Understand page
-- Auto-help suggestions
-- Manual action command runner (`click`, `type`, `go to`, `back`, etc.)
-- Relay endpoint setting + ping
-- Local fallback if relay is offline
-- MV3 service worker + content-script architecture
+### 6) Backward compatibility kept
+Still supports existing flows:
+- attach/detach tab
+- snapshot
+- understand
+- suggest
+- manual run command
+- relay endpoint save + ping
 
 ## Project structure
 
@@ -46,37 +63,17 @@ openclaw-chrome-extension/
     ├── content.js
     ├── popup.css
     ├── popup.html
-    └── popup.js
+    ├── popup.js
+    └── sidepanel.html
 ```
 
-## Install (Load unpacked)
-
-1. Open Chrome: `chrome://extensions`
+## Install / reload
+1. Open `chrome://extensions`
 2. Enable **Developer mode**
-3. Click **Load unpacked**
-4. Select folder: `openclaw-chrome-extension/`
-5. Pin extension to toolbar
+3. **Load unpacked** (or click **Reload** if already installed)
+4. Select this folder
 
-## v3 usage quick guide
-
-### Voice commands
-1. Open popup
-2. Tap mic button (🎙️)
-3. Speak command (example: “click sign in”)
-4. Transcript appears in command box, then click **Run command**
-
-### Safe autopilot
-1. Open popup on the desired page
-2. Click **Run safe autopilot**
-3. Extension executes low-risk steps only
-4. If risky actions are found, each appears with **Confirm & run**
-
-### Action history
-- Review last actions in **Action history** section
-- Click **Clear** to wipe stored history
-
-## Relay endpoint contract (optional)
-
+## Relay contract (optional but recommended)
 Used endpoints:
 - `GET /health`
 - `POST /attach`
@@ -84,11 +81,9 @@ Used endpoints:
 - `POST /suggest` (optional enhancement)
 - `POST /action` (optional enhancement)
 
-If relay is unavailable, extension runs local fallback logic.
+If relay is offline, extension falls back to local content-script execution for supported commands.
 
-## Validation / syntax checks
-
-From project directory:
+## Validation
 
 ```bash
 node --check src/background.js
@@ -98,9 +93,19 @@ python3 -m json.tool manifest.json >/dev/null
 ```
 
 ## Troubleshooting
+- **Side panel doesn’t open**
+  - Ensure Chrome supports MV3 Side Panel API and extension is reloaded after update.
+- **Relay stays offline/degraded**
+  - Verify endpoint and that `/health` responds.
+  - Check diagnostics in UI (status/latency/error).
+- **Command asks for confirmation**
+  - Expected for risky actions. Use **Confirm + run**.
+- **Page action not found**
+  - Command parser matched intent, but element text/label was not found on current DOM. Try snapshot first.
+- **No active tab**
+  - Use a standard `http/https` tab (not `chrome://` pages).
 
-- **No active tab**: use a normal `http/https` page (`chrome://` pages are restricted)
-- **Voice input unavailable**: browser/Web Speech support may be missing; type command manually
-- **Autopilot found risky actions only**: confirm risky entries manually or run command yourself
-- **Badge not updating**: switch tab or reload
-- **Relay offline**: verify endpoint and `GET /health`
+## Manual configuration still required
+- Running OpenClaw relay server on your local endpoint (default: `http://127.0.0.1:7331`)
+- Any relay-side implementations for `/understand`, `/suggest`, `/action` enhancements
+- Chrome permissions acceptance on first install/reload

@@ -3,13 +3,13 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>OpenClaw Browser Mode</title>
+    <title>OpenClaw Browser Mode Panel</title>
     <link rel="stylesheet" href="popup.css" />
   </head>
-  <body>
+  <body class="sidepanel">
     <main>
       <header class="top">
-        <h1>OpenClaw Browser Mode <span class="badge-v4">v4</span></h1>
+        <h1>OpenClaw Browser Mode <span class="badge-v4">v4 panel</span></h1>
         <div id="statusPill" class="pill">Checking…</div>
       </header>
 
@@ -35,7 +35,7 @@
       <section class="card">
         <label for="commandInput">Command / plan</label>
         <div class="command-row">
-          <input id="commandInput" type="text" placeholder="go to example.com then click sign in" />
+          <input id="commandInput" type="text" placeholder="search pricing then open new tab" />
           <button id="voiceBtn" type="button" title="Voice input">🎙️</button>
         </div>
         <div id="voiceHint" class="muted tiny">Voice input: checking browser support…</div>
@@ -48,15 +48,6 @@
       </section>
 
       <section class="card">
-        <label for="endpointInput">Relay endpoint</label>
-        <input id="endpointInput" type="text" placeholder="http://127.0.0.1:7331" />
-        <div class="actions-row mt8">
-          <button id="saveEndpointBtn" type="button">Save</button>
-          <button id="pingBtn" type="button">Ping</button>
-        </div>
-      </section>
-
-      <section class="card">
         <div class="label">Suggested next steps</div>
         <div id="suggestionsList" class="list"></div>
       </section>
@@ -64,6 +55,15 @@
       <section class="card">
         <div class="label history-head">Action log <button id="clearHistoryBtn" class="link-btn" type="button">Clear</button></div>
         <div id="historyList" class="history-list"></div>
+      </section>
+
+      <section class="card">
+        <label for="endpointInput">Relay endpoint</label>
+        <input id="endpointInput" type="text" placeholder="http://127.0.0.1:7331" />
+        <div class="actions-row mt8">
+          <button id="saveEndpointBtn" type="button">Save</button>
+          <button id="pingBtn" type="button">Ping</button>
+        </div>
       </section>
 
       <section class="card">
