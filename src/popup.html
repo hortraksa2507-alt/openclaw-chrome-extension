@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>OpenClaw Relay</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <main>
+      <h1>OpenClaw Relay</h1>
+
+      <section class="card">
+        <div class="row">
+          <span>Status</span>
+          <strong id="statusText">Checking…</strong>
+        </div>
+        <div class="row">
+          <span>Current tab</span>
+          <label class="switch">
+            <input type="checkbox" id="attachToggle" />
+            <span>Attach</span>
+          </label>
+        </div>
+        <button id="quickConnectBtn" type="button">Quick connect</button>
+      </section>
+
+      <section class="card">
+        <label for="endpointInput">Relay endpoint</label>
+        <input id="endpointInput" type="text" placeholder="http://127.0.0.1:7331" />
+        <button id="saveEndpointBtn" type="button">Save endpoint</button>
+      </section>
+
+      <section class="card">
+        <div class="label">Diagnostics</div>
+        <pre id="diagnosticsText">Not checked yet</pre>
+      </section>
+    </main>
+
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>
