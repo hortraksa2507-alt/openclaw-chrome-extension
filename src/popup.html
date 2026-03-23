@@ -9,7 +9,7 @@
   <body>
     <main>
       <header class="top">
-        <h1>OpenClaw Relay</h1>
+        <h1>OpenClaw Relay <span class="badge-v3">v3</span></h1>
         <div id="statusPill" class="pill">Checking…</div>
       </header>
 
@@ -32,8 +32,19 @@
       </section>
 
       <section class="card">
+        <div class="label">Safe autopilot</div>
+        <button id="autopilotBtn" class="primary" type="button">Run safe autopilot</button>
+        <p class="hint">Runs low-risk steps automatically. Risky actions are listed and need explicit confirmation.</p>
+        <div id="riskyList" class="risky-list"></div>
+      </section>
+
+      <section class="card">
         <label for="commandInput">Run action command</label>
-        <input id="commandInput" type="text" placeholder="e.g. click sign in / type email = me@x.com / go to example.com" />
+        <div class="command-row">
+          <input id="commandInput" type="text" placeholder="e.g. click sign in / type email = me@x.com / go to example.com" />
+          <button id="voiceBtn" type="button" title="Voice input">🎙️</button>
+        </div>
+        <div id="voiceHint" class="muted tiny">Voice input: checking browser support…</div>
         <button id="runCommandBtn" type="button">Run command</button>
       </section>
 
@@ -44,6 +55,14 @@
           <button id="saveEndpointBtn" type="button">Save</button>
           <button id="pingBtn" type="button">Ping</button>
         </div>
+      </section>
+
+      <section class="card">
+        <div class="label history-head">
+          Action history
+          <button id="clearHistoryBtn" class="link-btn" type="button">Clear</button>
+        </div>
+        <div id="historyList" class="history-list"></div>
       </section>
 
       <section class="card">

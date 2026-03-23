@@ -1,68 +1,39 @@
-# OpenClaw Chrome Extension (v2, Claude-like workflow)
+# OpenClaw Chrome Extension (v3)
 
-A Manifest V3 Chrome extension that provides a Claude-style browser-assistant workflow for OpenClaw.
+A Manifest V3 Chrome extension for OpenClaw browser relay workflows, now with voice command input, in-popup action history, and safe autopilot.
 
-> This project is **inspired by publicly documented behaviors** of Claude for Chrome, but does **not** copy Anthropic proprietary code, branding assets, or internal APIs.
+> Inspired by public Claude-for-Chrome workflows, but implemented as an independent local-first OpenClaw extension.
 
-## What it can do
+## What’s new in v3
 
-### Popup actions
-1. **Attach current tab** / detach tab
-2. **Snapshot page** (structured page analysis)
-3. **Understand page** (intent + key controls/forms/errors)
-4. **Auto-help suggestions** (next best action list)
-5. **Run action command** (lightweight helper commands)
+1. **Voice command input in popup**
+   - Uses Web Speech API (`SpeechRecognition` / `webkitSpeechRecognition`) when available.
+   - Graceful fallback: mic button disables with clear hint if unsupported.
 
-### Content analysis module (content script)
-Collects:
-- headings (`h1/h2/h3`)
-- visible links/buttons
-- forms and inputs
-- visible alerts/errors
-- dominant page type signals (login/dashboard/article/checkout/general)
+2. **Action history in popup**
+   - Tracks recent actions with status (`ok` / `warn` / `error`) and timestamps.
+   - Includes **Clear** button.
+   - Persists in extension local storage (last 40 actions).
 
-### Background orchestration
-- Per-tab attach state tracking
-- Per-tab metadata tracking (`title`, `url`, timestamps)
-- Badge status (`ON`/`OFF`) by tab
-- Configurable relay endpoint health ping
+3. **One-click Safe Autopilot**
+   - Analyzes current page context.
+   - Proposes low-risk and risky actions.
+   - Automatically executes only low-risk steps.
+   - Risky actions (`submit/delete/payment/send/...`) are listed and require explicit click confirmation before execution.
 
-### Relay integration + local fallback
-- Relay endpoint is configurable in popup settings
-- If relay is unavailable, extension still works with **local analysis + local suggestions + local action command execution**
+4. **UX polish**
+   - Cleaner v3 popup layout, clearer section labels, status visibility, and compact history/risky lists.
 
----
+## Existing features kept (v2 compatibility)
 
-## Public references used (research basis)
-
-Primary sources reviewed:
-1. Claude product page: https://claude.com/claude-for-chrome
-2. Chrome Web Store listing (Claude): https://chromewebstore.google.com/detail/claude/fcoeoabgfenejglbffodgkkbkcdhcgfn
-3. Engadget coverage summary: https://www.engadget.com/ai/claudes-chrome-plugin-is-now-available-to-all-paid-users-221024295.html
-
-Feature themes extracted from public docs/listing:
-- browser navigation + clicking + form filling via natural language
-- workflow automation / multi-step tasks
-- optional planning & workflow recording concepts
-- integration with Claude Code / desktop workflow concepts
-- safety emphasis around prompt-injection and risky actions
-
----
-
-## Limitations vs official Claude extension
-
-This extension does **not** currently include:
-- cloud-hosted agent planning/execution engine
-- true multi-tab autonomous workflows
-- workflow recording/playback
-- scheduled workflow runner
-- Claude account auth/subscription integration
-- enterprise admin controls (allowlist/blocklist/org policy)
-- deep console/network debugging pipeline like official product claims
-
-Instead, this project provides a practical, open, local-first relay UX for OpenClaw.
-
----
+- Attach/detach current tab
+- Snapshot page
+- Understand page
+- Auto-help suggestions
+- Manual action command runner (`click`, `type`, `go to`, `back`, etc.)
+- Relay endpoint setting + ping
+- Local fallback if relay is offline
+- MV3 service worker + content-script architecture
 
 ## Project structure
 
@@ -78,8 +49,6 @@ openclaw-chrome-extension/
     └── popup.js
 ```
 
----
-
 ## Install (Load unpacked)
 
 1. Open Chrome: `chrome://extensions`
@@ -88,81 +57,50 @@ openclaw-chrome-extension/
 4. Select folder: `openclaw-chrome-extension/`
 5. Pin extension to toolbar
 
----
+## v3 usage quick guide
 
-## Test steps
+### Voice commands
+1. Open popup
+2. Tap mic button (🎙️)
+3. Speak command (example: “click sign in”)
+4. Transcript appears in command box, then click **Run command**
 
-1. Open any regular website tab (`https://...`)
-2. Open popup and click **Ping**
-   - if relay is reachable: status shows `relay:online`
-   - if not reachable: status shows `relay:offline` (local mode still usable)
-3. Click **Attach current tab**
-   - badge becomes `ON`
-   - page marker appears in bottom-right
-4. Click **Snapshot page**
-   - output shows structured analysis JSON
-5. Click **Understand page**
-   - output includes intent + key controls + errors
-6. Click **Auto-help suggestions**
-   - output includes next-step suggestions
-7. Run command examples:
-   - `click sign in`
-   - `type email = alice@example.com`
-   - `go to example.com`
-   - `back`
+### Safe autopilot
+1. Open popup on the desired page
+2. Click **Run safe autopilot**
+3. Extension executes low-risk steps only
+4. If risky actions are found, each appears with **Confirm & run**
 
----
+### Action history
+- Review last actions in **Action history** section
+- Click **Clear** to wipe stored history
 
-## Relay endpoint contract (best-effort)
+## Relay endpoint contract (optional)
 
-Used endpoints (optional):
-- `GET /health` (connectivity)
+Used endpoints:
+- `GET /health`
 - `POST /attach`
 - `POST /understand` (optional enhancement)
 - `POST /suggest` (optional enhancement)
 - `POST /action` (optional enhancement)
 
-If optional endpoints are missing/unavailable, local fallback is used.
+If relay is unavailable, extension runs local fallback logic.
 
----
+## Validation / syntax checks
 
-## Troubleshooting
-
-### 1) "No active tab" or command failures
-- Open a normal `http/https` tab first
-- `chrome://` pages cannot run content scripts
-
-### 2) Snapshot/understand fails
-- Reload page, then retry
-- Verify content script is allowed on site
-
-### 3) Badge not updating
-- Switch tabs once or reload the page
-- Check service worker logs in `chrome://extensions`
-
-### 4) Relay always offline
-- Verify relay process and endpoint URL
-- Confirm endpoint responds to `GET /health`
-
-### 5) Command didn’t click/type expected target
-- Use more specific target text
-- Check if target is visible and interactable
-
----
-
-## Development notes
-
-- Manifest V3 (`background.service_worker` as module)
-- No proprietary third-party assets bundled
-- Local-first fallback behavior for resilience
-
-## Validate syntax locally
-
-From this project directory:
+From project directory:
 
 ```bash
 node --check src/background.js
 node --check src/content.js
 node --check src/popup.js
-python -m json.tool manifest.json >/dev/null
+python3 -m json.tool manifest.json >/dev/null
 ```
+
+## Troubleshooting
+
+- **No active tab**: use a normal `http/https` page (`chrome://` pages are restricted)
+- **Voice input unavailable**: browser/Web Speech support may be missing; type command manually
+- **Autopilot found risky actions only**: confirm risky entries manually or run command yourself
+- **Badge not updating**: switch tab or reload
+- **Relay offline**: verify endpoint and `GET /health`

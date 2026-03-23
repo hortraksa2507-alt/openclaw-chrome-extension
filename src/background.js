@@ -1,11 +1,15 @@
 const DEFAULT_ENDPOINT = "http://127.0.0.1:7331";
+const MAX_HISTORY = 40;
+const RISKY_PATTERN = /\b(submit|delete|remove|payment|pay|purchase|checkout|send|transfer|wire|confirm order|place order)\b/i;
+
 const STORAGE_DEFAULTS = {
   relayEndpoint: DEFAULT_ENDPOINT,
   attachedTabs: {},
   tabState: {},
   lastDiagnostics: "Not checked yet",
   relayReachable: false,
-  relayLastCheckedAt: null
+  relayLastCheckedAt: null,
+  actionHistory: []
 };
 
 async function getState() {
@@ -19,6 +23,97 @@ async function saveState(patch) {
 function normalizeEndpoint(value) {
   const raw = String(value || "").trim();
   return raw.replace(/\/$/, "") || DEFAULT_ENDPOINT;
+}
+
+function nowIso() {
+  return new Date().toISOString();
+}
+
+async function addHistory(action, status, detail = "") {
+  const state = await getState();
+  const next = [
+    {
+      id: `${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
+      action,
+      status,
+      detail,
+      ts: Date.now(),
+      tsIso: nowIso()
+    },
+    ...(state.actionHistory || [])
+  ].slice(0, MAX_HISTORY);
+
+  await saveState({ actionHistory: next });
+}
+
+function isRiskyLabel(text = "") {
+  return RISKY_PATTERN.test(String(text || ""));
+}
+
+function safeControlText(text = "") {
+  const t = String(text || "").trim();
+  if (!t) return null;
+  if (isRiskyLabel(t)) return null;
+  if (t.length > 80) return null;
+  return t;
+}
+
+function quoteForCommand(value = "") {
+  return String(value).replace(/"/g, '\\"');
+}
+
+function deriveAutopilotPlan(analysis, understanding) {
+  const controls = [
+    ...(analysis?.controls?.buttons || []).map((x) => ({ ...x, kind: "button" })),
+    ...(analysis?.controls?.links || []).map((x) => ({ ...x, kind: "link" }))
+  ];
+
+  const riskyCandidates = [];
+  const safeCandidates = [];
+
+  for (const c of controls) {
+    const label = (c?.text || "").trim();
+    if (!label) continue;
+
+    if (isRiskyLabel(label)) {
+      riskyCandidates.push({
+        label,
+        reason: "Potentially destructive/committing action",
+        command: `click ${label}`
+      });
+      continue;
+    }
+
+    const safeText = safeControlText(label);
+    if (!safeText) continue;
+
+    safeCandidates.push({
+      label: safeText,
+      reason: c.kind === "link" ? "Navigation-like action" : "Visible non-risk control",
+      command: `click ${safeText}`
+    });
+  }
+
+  const lowRisk = [];
+
+  lowRisk.push({
+    label: "Refresh understanding snapshot",
+    reason: "Read-only analysis step",
+    command: "snapshot"
+  });
+
+  for (const candidate of safeCandidates) {
+    if (lowRisk.length >= 4) break;
+    if (!lowRisk.find((x) => x.command.toLowerCase() === candidate.command.toLowerCase())) {
+      lowRisk.push(candidate);
+    }
+  }
+
+  return {
+    pageIntent: understanding?.intent || [],
+    lowRisk,
+    risky: riskyCandidates.slice(0, 6)
+  };
 }
 
 async function withTimeout(promise, ms = 5000) {
@@ -194,6 +289,14 @@ function localSuggestions(understanding) {
   return suggestions.slice(0, 6);
 }
 
+async function executeCommandInTab(tabId, command) {
+  if (command === "snapshot") {
+    const analysis = await getLocalAnalysis(tabId);
+    return { ok: true, note: "Snapshot refreshed", analysis };
+  }
+  return sendToTab(tabId, { type: "OPENCLAW_RUN_ACTION", command }).catch(() => ({ ok: false, error: "Action dispatch failed" }));
+}
+
 chrome.runtime.onInstalled.addListener(async () => {
   const current = await getState();
   await saveState({
@@ -202,7 +305,8 @@ chrome.runtime.onInstalled.addListener(async () => {
     tabState: current.tabState,
     lastDiagnostics: current.lastDiagnostics,
     relayReachable: Boolean(current.relayReachable),
-    relayLastCheckedAt: current.relayLastCheckedAt || null
+    relayLastCheckedAt: current.relayLastCheckedAt || null,
+    actionHistory: Array.isArray(current.actionHistory) ? current.actionHistory.slice(0, MAX_HISTORY) : []
   });
 });
 
@@ -241,14 +345,22 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         tabId,
         tabUrl: tab?.url || null,
         tabTitle: tab?.title || null,
-        attached: tabId ? Boolean(state.attachedTabs[String(tabId)]) : false
+        attached: tabId ? Boolean(state.attachedTabs[String(tabId)]) : false,
+        actionHistory: state.actionHistory || []
       });
+      return;
+    }
+
+    if (message?.type === "CLEAR_ACTION_HISTORY") {
+      await saveState({ actionHistory: [] });
+      sendResponse({ ok: true });
       return;
     }
 
     if (message?.type === "SET_ENDPOINT") {
       const endpoint = normalizeEndpoint(message.endpoint);
       await saveState({ relayEndpoint: endpoint });
+      await addHistory("Set relay endpoint", "ok", endpoint);
       sendResponse({ ok: true, relayEndpoint: endpoint });
       return;
     }
@@ -256,6 +368,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message?.type === "PING_ENDPOINT") {
       const state = await getState();
       const result = await pingRelay(state.relayEndpoint);
+      await addHistory("Ping relay", result.ok ? "ok" : "error", result.diagnostics);
       sendResponse({ ok: result.ok, diagnostics: result.diagnostics });
       return;
     }
@@ -267,6 +380,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return;
       }
       await setAttachForTab(tab.id, Boolean(message.attached));
+      await addHistory(Boolean(message.attached) ? "Attach current tab" : "Detach current tab", "ok", tab.title || tab.url || "");
       sendResponse({ ok: true });
       return;
     }
@@ -284,8 +398,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
       try {
         const analysis = await getLocalAnalysis(tab.id);
+        await addHistory("Snapshot page", "ok", tab.title || tab.url || "");
         sendResponse({ ok: true, source: "local", analysis });
       } catch (error) {
+        await addHistory("Snapshot page", "error", error.message);
         sendResponse({ ok: false, error: error.message });
       }
       return;
@@ -310,6 +426,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           });
         }
 
+        await addHistory("Understand page", "ok", tab.title || tab.url || "");
         sendResponse({
           ok: true,
           source: relay?.ok ? "relay+local" : "local",
@@ -318,6 +435,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           relay
         });
       } catch (error) {
+        await addHistory("Understand page", "error", error.message);
         sendResponse({ ok: false, error: error.message });
       }
       return;
@@ -344,6 +462,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           });
         }
 
+        await addHistory("Auto-help suggestions", "ok", tab.title || tab.url || "");
         sendResponse({
           ok: true,
           source: relay?.ok ? "relay+local" : "local",
@@ -353,6 +472,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           relay
         });
       } catch (error) {
+        await addHistory("Auto-help suggestions", "error", error.message);
         sendResponse({ ok: false, error: error.message });
       }
       return;
@@ -373,6 +493,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             command: message.command
           });
           if (relay?.ok && relay?.data) {
+            await addHistory("Run command", "ok", `relay: ${message.command}`);
             sendResponse({ ok: true, source: "relay", result: relay.data, relay });
             return;
           }
@@ -380,14 +501,80 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
         const local = await sendToTab(tab.id, { type: "OPENCLAW_RUN_ACTION", command: message.command }).catch(() => null);
         if (!local?.ok) {
+          await addHistory("Run command", "error", `${message.command} :: ${local?.error || "Command failed"}`);
           sendResponse({ ok: false, source: "local", error: local?.error || "Command failed" });
           return;
         }
 
+        await addHistory("Run command", "ok", `local: ${message.command}`);
         sendResponse({ ok: true, source: "local", result: local, relay });
       } catch (error) {
+        await addHistory("Run command", "error", error.message);
         sendResponse({ ok: false, error: error.message });
       }
+      return;
+    }
+
+    if (message?.type === "AUTOPILOT_SAFE_RUN") {
+      const tab = await getActiveTab();
+      if (!tab?.id) return sendResponse({ ok: false, error: "No active tab" });
+
+      try {
+        const analysis = await getLocalAnalysis(tab.id);
+        const understanding = localUnderstand(analysis);
+        const plan = deriveAutopilotPlan(analysis, understanding);
+
+        const executed = [];
+        for (const step of plan.lowRisk) {
+          const result = await executeCommandInTab(tab.id, step.command);
+          executed.push({ step, result });
+          if (!result?.ok) break;
+        }
+
+        await addHistory(
+          "Safe autopilot run",
+          executed.every((x) => x.result?.ok) ? "ok" : "warn",
+          `${executed.filter((x) => x.result?.ok).length}/${plan.lowRisk.length} low-risk steps executed`
+        );
+
+        sendResponse({
+          ok: true,
+          analysis,
+          understanding,
+          plan,
+          executed,
+          requiresConfirmation: plan.risky.length > 0
+        });
+      } catch (error) {
+        await addHistory("Safe autopilot run", "error", error.message);
+        sendResponse({ ok: false, error: error.message });
+      }
+      return;
+    }
+
+    if (message?.type === "AUTOPILOT_EXECUTE_RISKY") {
+      const tab = await getActiveTab();
+      if (!tab?.id) return sendResponse({ ok: false, error: "No active tab" });
+
+      const command = String(message.command || "").trim();
+      if (!command) {
+        sendResponse({ ok: false, error: "No risky command provided" });
+        return;
+      }
+
+      if (!message.confirmed) {
+        sendResponse({ ok: false, error: "Explicit confirmation required" });
+        return;
+      }
+
+      if (!isRiskyLabel(command)) {
+        sendResponse({ ok: false, error: "Command is not marked risky" });
+        return;
+      }
+
+      const result = await executeCommandInTab(tab.id, command);
+      await addHistory("Risky autopilot step", result?.ok ? "ok" : "error", quoteForCommand(command));
+      sendResponse({ ok: Boolean(result?.ok), result });
       return;
     }
 
