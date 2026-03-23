@@ -3,37 +3,52 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>OpenClaw Relay</title>
+    <title>OpenClaw Browser Relay</title>
     <link rel="stylesheet" href="popup.css" />
   </head>
   <body>
     <main>
-      <h1>OpenClaw Relay</h1>
+      <header class="top">
+        <h1>OpenClaw Relay</h1>
+        <div id="statusPill" class="pill">Checking…</div>
+      </header>
 
       <section class="card">
-        <div class="row">
-          <span>Status</span>
-          <strong id="statusText">Checking…</strong>
+        <div class="label">Current tab</div>
+        <div id="tabMeta" class="muted">No tab selected</div>
+        <div class="actions-row mt8">
+          <button id="attachBtn" class="primary" type="button">Attach current tab</button>
+          <button id="detachBtn" type="button">Detach</button>
         </div>
-        <div class="row">
-          <span>Current tab</span>
-          <label class="switch">
-            <input type="checkbox" id="attachToggle" />
-            <span>Attach</span>
-          </label>
+      </section>
+
+      <section class="card">
+        <div class="label">Assist</div>
+        <div class="grid-actions">
+          <button id="snapshotBtn" type="button">Snapshot page</button>
+          <button id="understandBtn" type="button">Understand page</button>
+          <button id="suggestBtn" type="button">Auto-help suggestions</button>
         </div>
-        <button id="quickConnectBtn" type="button">Quick connect</button>
+      </section>
+
+      <section class="card">
+        <label for="commandInput">Run action command</label>
+        <input id="commandInput" type="text" placeholder="e.g. click sign in / type email = me@x.com / go to example.com" />
+        <button id="runCommandBtn" type="button">Run command</button>
       </section>
 
       <section class="card">
         <label for="endpointInput">Relay endpoint</label>
         <input id="endpointInput" type="text" placeholder="http://127.0.0.1:7331" />
-        <button id="saveEndpointBtn" type="button">Save endpoint</button>
+        <div class="actions-row">
+          <button id="saveEndpointBtn" type="button">Save</button>
+          <button id="pingBtn" type="button">Ping</button>
+        </div>
       </section>
 
       <section class="card">
-        <div class="label">Diagnostics</div>
-        <pre id="diagnosticsText">Not checked yet</pre>
+        <div class="label">Output</div>
+        <pre id="outputText">Ready.</pre>
       </section>
     </main>
 

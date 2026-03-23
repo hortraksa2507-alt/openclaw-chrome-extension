@@ -1,19 +1,70 @@
-# OpenClaw Chrome Extension (Browser Relay)
+# OpenClaw Chrome Extension (v2, Claude-like workflow)
 
-A minimal Manifest V3 Chrome extension that provides a Claude-style convenience flow for attaching your current tab to OpenClaw.
+A Manifest V3 Chrome extension that provides a Claude-style browser-assistant workflow for OpenClaw.
 
-## Features
+> This project is **inspired by publicly documented behaviors** of Claude for Chrome, but does **not** copy Anthropic proprietary code, branding assets, or internal APIs.
 
-- **Popup UI** with:
-  - Attach status
-  - **Quick connect** button
-  - Current tab attach toggle
-  - Basic diagnostics text
-- **Content script + service worker messaging** for per-tab attach state
-- Configurable **OpenClaw relay endpoint** (default: `http://127.0.0.1:7331`)
-- **Badge ON/OFF** state on the extension icon (per active tab)
+## What it can do
 
-## Project Structure
+### Popup actions
+1. **Attach current tab** / detach tab
+2. **Snapshot page** (structured page analysis)
+3. **Understand page** (intent + key controls/forms/errors)
+4. **Auto-help suggestions** (next best action list)
+5. **Run action command** (lightweight helper commands)
+
+### Content analysis module (content script)
+Collects:
+- headings (`h1/h2/h3`)
+- visible links/buttons
+- forms and inputs
+- visible alerts/errors
+- dominant page type signals (login/dashboard/article/checkout/general)
+
+### Background orchestration
+- Per-tab attach state tracking
+- Per-tab metadata tracking (`title`, `url`, timestamps)
+- Badge status (`ON`/`OFF`) by tab
+- Configurable relay endpoint health ping
+
+### Relay integration + local fallback
+- Relay endpoint is configurable in popup settings
+- If relay is unavailable, extension still works with **local analysis + local suggestions + local action command execution**
+
+---
+
+## Public references used (research basis)
+
+Primary sources reviewed:
+1. Claude product page: https://claude.com/claude-for-chrome
+2. Chrome Web Store listing (Claude): https://chromewebstore.google.com/detail/claude/fcoeoabgfenejglbffodgkkbkcdhcgfn
+3. Engadget coverage summary: https://www.engadget.com/ai/claudes-chrome-plugin-is-now-available-to-all-paid-users-221024295.html
+
+Feature themes extracted from public docs/listing:
+- browser navigation + clicking + form filling via natural language
+- workflow automation / multi-step tasks
+- optional planning & workflow recording concepts
+- integration with Claude Code / desktop workflow concepts
+- safety emphasis around prompt-injection and risky actions
+
+---
+
+## Limitations vs official Claude extension
+
+This extension does **not** currently include:
+- cloud-hosted agent planning/execution engine
+- true multi-tab autonomous workflows
+- workflow recording/playback
+- scheduled workflow runner
+- Claude account auth/subscription integration
+- enterprise admin controls (allowlist/blocklist/org policy)
+- deep console/network debugging pipeline like official product claims
+
+Instead, this project provides a practical, open, local-first relay UX for OpenClaw.
+
+---
+
+## Project structure
 
 ```text
 openclaw-chrome-extension/
@@ -27,76 +78,91 @@ openclaw-chrome-extension/
     └── popup.js
 ```
 
+---
+
 ## Install (Load unpacked)
 
-1. Open Chrome and go to `chrome://extensions`
+1. Open Chrome: `chrome://extensions`
 2. Enable **Developer mode**
 3. Click **Load unpacked**
-4. Select this folder: `openclaw-chrome-extension/`
-5. Pin the extension to your toolbar for easier access
+4. Select folder: `openclaw-chrome-extension/`
+5. Pin extension to toolbar
 
-## Usage
+---
 
-1. Open the extension popup.
-2. (Optional) Set your relay endpoint and click **Save endpoint**.
-3. Click **Quick connect** to test relay health and auto-attach current tab on success.
-4. Toggle **Attach** to manually set attach state for current tab.
-5. Check diagnostics text for relay connectivity details.
+## Test steps
 
-## Permissions Explained
+1. Open any regular website tab (`https://...`)
+2. Open popup and click **Ping**
+   - if relay is reachable: status shows `relay:online`
+   - if not reachable: status shows `relay:offline` (local mode still usable)
+3. Click **Attach current tab**
+   - badge becomes `ON`
+   - page marker appears in bottom-right
+4. Click **Snapshot page**
+   - output shows structured analysis JSON
+5. Click **Understand page**
+   - output includes intent + key controls + errors
+6. Click **Auto-help suggestions**
+   - output includes next-step suggestions
+7. Run command examples:
+   - `click sign in`
+   - `type email = alice@example.com`
+   - `go to example.com`
+   - `back`
 
-- `storage`: save endpoint + attach state + diagnostics
-- `tabs` / `activeTab`: identify and control current tab attach status
-- Host permissions (`http://127.0.0.1/*`, `http://localhost/*`): talk to local OpenClaw relay endpoints
-- Content script on `http/https`: display attach marker and sync state with background worker
+---
 
-## Relay Endpoint Contract (expected)
+## Relay endpoint contract (best-effort)
 
-This extension calls:
+Used endpoints (optional):
+- `GET /health` (connectivity)
+- `POST /attach`
+- `POST /understand` (optional enhancement)
+- `POST /suggest` (optional enhancement)
+- `POST /action` (optional enhancement)
 
-- `GET {endpoint}/health` for quick diagnostics
-- `POST {endpoint}/attach` (best effort) when tab attach state changes
+If optional endpoints are missing/unavailable, local fallback is used.
 
-If your relay uses a different API shape, adjust `src/background.js` accordingly.
-
-## Verification / Smoke Test
-
-After loading unpacked:
-
-1. Confirm extension loads with no manifest errors in `chrome://extensions`.
-2. Open popup and click **Quick connect**.
-3. If relay is reachable, status should show connected and badge should change to `ON` when attached.
-4. Toggle attach off/on and verify:
-   - Badge switches `OFF` / `ON`
-   - Small page marker appears/disappears in the bottom-right corner.
-5. Reload a tab and ensure state remains consistent.
-
-## Package for Release
-
-From workspace root:
-
-```bash
-cd /Users/raksa/.openclaw/workspace
-zip -r openclaw-chrome-extension.zip openclaw-chrome-extension
-```
-
-Then publish the ZIP as a GitHub release asset or share directly.
+---
 
 ## Troubleshooting
 
-- **UNREACHABLE diagnostics**:
-  - Ensure OpenClaw relay is running locally.
-  - Verify endpoint host/port in popup.
-  - Check CORS/network restrictions on relay server.
-- **Badge not updating**:
-  - Refresh tab and reopen popup.
-  - Check extension service worker in `chrome://extensions` → "service worker" logs.
-- **No page marker**:
-  - Verify content script is allowed on that URL.
-  - Some browser internal pages (`chrome://`) do not allow content scripts.
+### 1) "No active tab" or command failures
+- Open a normal `http/https` tab first
+- `chrome://` pages cannot run content scripts
 
-## Security Notes
+### 2) Snapshot/understand fails
+- Reload page, then retry
+- Verify content script is allowed on site
 
-- No secrets are hardcoded.
-- Endpoint is user-configurable and stored locally in extension storage.
-- Extension scopes network access only to localhost by default.
+### 3) Badge not updating
+- Switch tabs once or reload the page
+- Check service worker logs in `chrome://extensions`
+
+### 4) Relay always offline
+- Verify relay process and endpoint URL
+- Confirm endpoint responds to `GET /health`
+
+### 5) Command didn’t click/type expected target
+- Use more specific target text
+- Check if target is visible and interactable
+
+---
+
+## Development notes
+
+- Manifest V3 (`background.service_worker` as module)
+- No proprietary third-party assets bundled
+- Local-first fallback behavior for resilience
+
+## Validate syntax locally
+
+From this project directory:
+
+```bash
+node --check src/background.js
+node --check src/content.js
+node --check src/popup.js
+python -m json.tool manifest.json >/dev/null
+```
